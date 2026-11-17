@@ -1,0 +1,9 @@
+{
+  "appId": "fi.hakuviestit.app",
+  "appName": "Hakuviestit",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#EEF2F0"
+  }
+}

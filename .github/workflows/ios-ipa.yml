@@ -1,0 +1,81 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build web app
+        run: npm run build:web
+
+      - name: Add iOS platform
+        run: npx cap add ios
+
+      - name: Add Face ID usage description
+        run: |
+          set -eo pipefail
+          PLIST=ios/App/App/Info.plist
+          MSG="Hakuviestit käyttää Face ID:tä sovelluksen avaamiseen."
+          plutil -replace NSFaceIDUsageDescription -string "$MSG" "$PLIST"   # lisää tai korvaa
+          /usr/libexec/PlistBuddy -c "Print :NSFaceIDUsageDescription" "$PLIST"
+
+      - name: Set app icon
+        run: node scripts/set-ios-icon.mjs assets/icon.png ios/App/App/Assets.xcassets/AppIcon.appiconset
+
+      - name: Sync Capacitor
+        run: npx cap sync ios
+
+      - name: Build (unsigned)
+        run: |
+          set -eo pipefail
+          if [ -d ios/App/App.xcworkspace ]; then
+            TARGET=(-workspace ios/App/App.xcworkspace)
+          else
+            TARGET=(-project ios/App/App.xcodeproj)
+          fi
+          xcodebuild "${TARGET[@]}" \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package IPA
+        run: |
+          set -eo pipefail
+          APP_PATH="build/Build/Products/Release-iphoneos/App.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "App.app not found at $APP_PATH"
+            find build -name "*.app" -maxdepth 6
+            exit 1
+          fi
+          rm -rf Payload Hakuviestit.ipa
+          mkdir Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry Hakuviestit.ipa Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hakuviestit-ipa
+          path: Hakuviestit.ipa
+          if-no-files-found: error

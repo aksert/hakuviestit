@@ -1,0 +1,24 @@
+{
+  "name": "hakuviestit",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hakuviestit - mobiilisovelluksen iPhone-paketointi (Capacitor-iOS-sovellus)",
+  "scripts": {
+    "build:web": "node scripts/build-web.mjs",
+    "icons": "node scripts/generate-icons.mjs"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/ios": "^8.0.0",
+    "@capacitor/share": "8.0.3",
+    "@capgo/capacitor-native-biometric": "8.9.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
