@@ -5,3 +5,9 @@ build/
 *.ipa
 .DS_Store
 Thumbs.db
+
+# Kehitys: build-tulosteet
+/hakuviestit.html
+/seed.json
+dev/script-extracted.js
+dev/shots/

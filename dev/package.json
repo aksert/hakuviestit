@@ -1,0 +1,6 @@
+{
+  "name": "hakuviestit-dev",
+  "private": true,
+  "type": "commonjs",
+  "description": "Lähteet ja testit (node build.js, node test-*.js)"
+}
