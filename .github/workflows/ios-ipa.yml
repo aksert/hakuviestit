@@ -7,7 +7,8 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-15-intel   # arm64-koneilla jonoja; Intel-kone toimii samalla Xcodella
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
