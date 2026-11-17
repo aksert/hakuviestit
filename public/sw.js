@@ -1,10 +1,13 @@
 // Hakuviestit service worker.
 // __BUILD_ID__ korvataan build-web.mjs:ssä sisällön tiivisteellä, jolloin
 // jokainen uusi versio saa oman välimuistinsa ja vanhat poistetaan.
+// Fontit ovat omalta palvelimelta (fonts/) ja esivälimuistitetaan rungon mukana.
+// Vain saman originin GET-pyyntöjä käsitellään; ristiin-origin-pyyntöjä ei koskaan välimuistiteta.
 const VERSION = '__BUILD_ID__';
 const SHELL_CACHE = 'hakuviestit-shell-' + VERSION;
-const FONT_CACHE = 'hakuviestit-fonts-v1';
-const KEEP = [SHELL_CACHE, FONT_CACHE];
+
+// build-web.mjs korvaa tämän listan fonttitiedostoilla.
+const FONT_FILES = [/*__FONT_FILES__*/];
 
 const SHELL = [
   './',
@@ -14,6 +17,7 @@ const SHELL = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-512-maskable.png',
+  ...FONT_FILES,
 ];
 
 self.addEventListener('install', (event) => {
@@ -28,33 +32,13 @@ self.addEventListener('activate', (event) => {
       .keys()
       .then((names) =>
         Promise.all(
-          names
-            .filter((n) => n.startsWith('hakuviestit-') && !KEEP.includes(n))
-            .map((n) => caches.delete(n))
+          // Poistetaan kaikki vanhat hakuviestit-välimuistit (myös vanha hakuviestit-fonts-v1).
+          names.filter((n) => n.startsWith('hakuviestit-') && n !== SHELL_CACHE).map((n) => caches.delete(n))
         )
       )
       .then(() => self.clients.claim())
   );
 });
-
-function isFontRequest(url) {
-  return url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
-}
-
-// Stale-while-revalidate: palauta välimuistista heti, päivitä taustalla.
-async function staleWhileRevalidate(request) {
-  const cache = await caches.open(FONT_CACHE);
-  const cached = await cache.match(request);
-  const network = fetch(request)
-    .then((response) => {
-      if (response && (response.ok || response.type === 'opaque')) {
-        cache.put(request, response.clone());
-      }
-      return response;
-    })
-    .catch(() => cached);
-  return cached || network;
-}
 
 // Cache-first: sovelluksen runko löytyy aina välimuistista.
 async function cacheFirst(request) {
@@ -62,7 +46,7 @@ async function cacheFirst(request) {
   if (cached) return cached;
   try {
     const response = await fetch(request);
-    if (response && response.ok && new URL(request.url).origin === self.location.origin) {
+    if (response && response.ok) {
       const cache = await caches.open(SHELL_CACHE);
       cache.put(request, response.clone());
     }
@@ -80,12 +64,7 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-
-  if (isFontRequest(url)) {
-    event.respondWith(staleWhileRevalidate(request));
-    return;
-  }
-  if (url.origin === self.location.origin) {
-    event.respondWith(cacheFirst(request));
-  }
+  // Vain sama origin; muut pyynnöt jätetään selaimelle (CSP estää ne joka tapauksessa).
+  if (url.origin !== self.location.origin) return;
+  event.respondWith(cacheFirst(request));
 });
