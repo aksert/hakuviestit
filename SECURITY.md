@@ -1,6 +1,6 @@
 # Tietoturva
 
-Hakuviestit tallentaa tiedot vain käyttäjän omalle laitteelle, salattuna. Sovellus ei lähetä tietoja palvelimelle eikä tee pyyntöjä kolmansille osapuolille.
+Hakuviestit tallentaa tiedot vain käyttäjän omalle laitteelle, salattuna. Sovellus ei lähetä tietoja palvelimelle eikä tee pyyntöjä kolmansille osapuolille. Ainoa poikkeus on valinnainen Gmail-haku: kun käyttäjä yhdistää Gmailin ja painaa hakua, puhelin hakee viestit suoraan osoitteesta `gmail.googleapis.com` vain lukuluvalla (`gmail.readonly`). Kirjautumista ei tallenneta.
 
 ## Haavoittuvuuden ilmoittaminen
 

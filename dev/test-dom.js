@@ -4,7 +4,8 @@ const vm = require('vm');
 const path = require('path');
 const SP = path.dirname(process.argv[1]);
 const NATIVE = process.argv[2] === 'native';            // Capacitor-natiivikuori (valekäyttöliittymä): standalone + natiivit liitännäiset
-const STANDALONE = process.argv[2] === 'standalone' || NATIVE;
+const REST = process.argv[2] === 'standalone-gmail';     // puhelinversio + suora Gmail-yhteys (valefetch, kuvitteellista dataa)
+const STANDALONE = process.argv[2] === 'standalone' || NATIVE || REST;
 const GMMODE = ['gmail', 'gmail-null', 'disc', 'disc-nosample'].includes(process.argv[2]) ? process.argv[2] : '';
 
 class Node { }
@@ -124,6 +125,22 @@ if (STANDALONE) {
   const db = { createObjectStore() { }, transaction() { const tx = { objectStore: storeOf }; setTimeout(() => tx.oncomplete && tx.oncomplete(), 15); return tx; } };
   globalThis.indexedDB = { open() { const r = {}; setTimeout(() => { r.result = db; r.onupgradeneeded && r.onupgradeneeded(); r.onsuccess && r.onsuccess(); }, 1); return r; } };
 }
+if (REST) {
+  // Paluu Googlen kirjautumisesta: token fragmentissa, state localStoragessa (sovellus tallensi sen ennen siirtymistä)
+  const HIST = globalThis.HIST = [];
+  const scope = encodeURIComponent('https://www.googleapis.com/auth/gmail.readonly');
+  localStorage.setItem('hv-oauth-state', 'teststate123'); localStorage.setItem('hv-oauth-intent', 'discover');
+  globalThis.location = { protocol: 'https:', hostname: 'esim.example', pathname: '/hv/', search: '', hash: '#access_token=TESTTOKEN-xyz&token_type=Bearer&expires_in=3599&scope=' + scope + '&state=teststate123',
+    get href() { return 'https://esim.example' + this.pathname + this.search + this.hash; }, assign(u) { HIST.push(['assign', u]); } };
+  globalThis.history = { replaceState(a, b, u) { HIST.push(['replace', u]); globalThis.location.hash = ''; } };
+  globalThis.FETCHLOG = []; globalThis.FETCHHANDLER = null;
+  globalThis.fetch = async (url, opts) => {
+    FETCHLOG.push({ url: String(url), auth: opts && opts.headers && opts.headers.Authorization, opts });
+    await new Promise(r => setTimeout(r, 2));
+    const r = FETCHHANDLER ? await FETCHHANDLER(String(url)) : { status: 404, body: {} };
+    return { ok: r.status >= 200 && r.status < 300, status: r.status, headers: { get: () => null }, json: async () => r.body };
+  };
+}
 if (NATIVE) {
   // Valeliitännäiset: NativeBiometric (Keychain), Filesystem, Share. Lokit ja käyttäytymiskytkimet testille.
   const NBX = globalThis.NBX = { log: [], setCalls: [], getCalls: [], delCalls: [], stored: null, avail: true, getErr: null, setErr: null, override: null };
@@ -166,5 +183,5 @@ if (GMMODE) {
   globalThis.USE_REQUESTED = [];
   globalThis.claude = { use: async n => { USE_REQUESTED.push(n); return n === 'mcp' ? (GMMODE === 'gmail-null' ? null : fakeMcp) : n === 'permissions' ? fakePerm : null; } };
 }
-const code = fs.readFileSync(path.join(SP, 'script-extracted.js'), 'utf8') + '\n' + fs.readFileSync(path.join(SP, 'driver-common.js'), 'utf8') + '\n' + fs.readFileSync(path.join(SP, NATIVE ? 'driver-native.js' : STANDALONE ? 'driver-standalone.js' : (process.argv[2] === 'layout' ? 'driver-layout.js' : GMMODE.startsWith('disc') ? 'driver-disc.js' : GMMODE ? 'driver-gmail.js' : 'driver.js')), 'utf8');
+const code = fs.readFileSync(path.join(SP, 'script-extracted.js'), 'utf8') + '\n' + fs.readFileSync(path.join(SP, 'driver-common.js'), 'utf8') + '\n' + fs.readFileSync(path.join(SP, NATIVE ? 'driver-native.js' : REST ? 'driver-rest.js' : STANDALONE ? 'driver-standalone.js' : (process.argv[2] === 'layout' ? 'driver-layout.js' : GMMODE.startsWith('disc') ? 'driver-disc.js' : GMMODE ? 'driver-gmail.js' : 'driver.js')), 'utf8');
 try { vm.runInThisContext(code, { filename: 'app.js' }); } catch (e) { origErr('ESIAJO-VIRHE', e.stack); process.exit(2); }

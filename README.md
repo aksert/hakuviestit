@@ -10,9 +10,25 @@ Hakuviestit on web-sovellus (PWA), joka asennetaan iPhonen Koti-valikkoon Safari
 
 ## Tietosuoja ja varmuuskopiot
 
-- Tiedot tallentuvat **vain tähän puhelimeen**, salattuina. Sovellus ei lähetä niitä minnekään eikä tee pyyntöjä kolmansille osapuolille (fontitkin ovat sovelluksen mukana).
+- Tiedot tallentuvat **vain tähän puhelimeen**, salattuina. Sovellus ei lähetä niitä minnekään eikä tee pyyntöjä kolmansille osapuolille (fontitkin ovat sovelluksen mukana). Ainoa poikkeus on Gmail-haku, jos otat sen käyttöön (alla).
 - Jos Safarin tiedot tyhjennetään tai sovellus poistetaan, tiedot katoavat. Ota siksi **salattu varmuuskopio** säännöllisesti: Omat tilit → **Lataa salattu varmuuskopio** → **Tallenna tiedostoihin**. Varmuuskopio avautuu vain salasanallasi.
-- **Gmail-yhteys** toimii vain claude.ai-versiossa. Web-sovelluksessa tuo viestit **.eml- tai .mbox-tiedostoina** (Tuo-välilehti) ja lähetä vastaukset puhelimen sähköpostisovelluksella.
+
+## Gmail-haku (valinnainen)
+
+Sovellus voi hakea työnhaun sähköpostit suoraan Gmailista puhelimeen. Se käyttää vain lukulupaa: sähköposteja ei voi lähettää eikä poistaa. Kirjautumista ei tallenneta, vaan se on voimassa tunnin ja unohtuu, kun sovellus lukittuu. Vastaukset lähetetään puhelimen sähköpostisovelluksella.
+
+Kerran tehtävä asennus (noin 10 min) tarvitsee oman Google-asiakastunnuksen:
+
+1. Avaa **console.cloud.google.com** ja luo projekti (esim. "Hakuviestit").
+2. **APIs & Services → Library → Gmail API → Enable**.
+3. **OAuth consent screen**: tyyppi *External*, sovelluksen nimi ja oma sähköpostisi. Lisää kohtaan **Test users** oma Gmail-osoitteesi.
+4. **Credentials → Create OAuth client ID → Web application**:
+   - *Authorized JavaScript origins*: `https://aksert.github.io`
+   - *Authorized redirect URIs*: `https://aksert.github.io/hakuviestit/`
+5. Kopioi **Client ID** ja liitä se sovelluksessa: **Omat tilit → Gmail → Google-asiakastunnus → Tallenna tunnus**.
+6. Paina **Yhdistä Gmail**. Google varoittaa, että sovellusta ei ole vahvistettu (se on vain omassa testikäytössäsi): valitse *Continue*. Palattuasi avaa sovellus salasanalla, jolloin työpaikkakeskustelujen etsintä käynnistyy.
+
+Luvan voi perua milloin tahansa: myaccount.google.com → Tietoturva → Kolmannen osapuolen yhteydet. Outlook-postin voi edelleen tuoda **.eml- tai .mbox-tiedostoina** (Tuo-välilehti).
 
 ## Valinnainen: .ipa (edistynyt)
 

@@ -29,11 +29,12 @@ const fragment = readFileSync(srcFile, 'utf8')
   .replace(/[ \t]*<link\b[^>]*(?:fonts\.googleapis\.com|fonts\.gstatic\.com)[^>]*>[ \t]*\r?\n?/gi, '');
 
 // Content-Security-Policy vain itsenäiseen PWA-versioon (claude.ai-artifaktiin sitä ei lisätä, koska ajoympäristö injektoi omia skriptejään). frame-ancestors ei toimi meta-elementissä.
+// Ainoa ulkoinen yhteys: gmail.googleapis.com (omistajan hyväksymä poikkeus; käyttäjän itse käynnistämä Gmail-haku, vain lukulupa).
 const head = `<!doctype html>
 <html lang="fi">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'self'; manifest-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://gmail.googleapis.com; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'self'; manifest-src 'self'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">

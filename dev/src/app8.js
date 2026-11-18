@@ -37,7 +37,7 @@ async function startDiscovery(period, entered) {
     const want = normEmail(entered || myEmail() || '');
     if (acc && !myEmailSet().has(acc)) {
       if (want && acc !== want) {
-        const go = await confirmSheet({ title: 'Gmail-tili', ok: 'Jatka tällä tilillä', text: 'Gmail-yhdistäjä on kirjautunut tilille ' + acc + '. Voit hakea vain sen tilin postit.' });
+        const go = await confirmSheet({ title: 'Gmail-tili', ok: 'Jatka tällä tilillä', text: (gmailIsRest() ? 'Olet kirjautunut Googleen tilillä ' : 'Gmail-yhdistäjä on kirjautunut tilille ') + acc + '. Voit hakea vain sen tilin postit.' });
         if (!go) return stop();
       }
       const ids = ((S.profile && S.profile.identities) || []).slice();

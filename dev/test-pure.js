@@ -9,7 +9,7 @@ function section(a, b) {
   return html.slice(i, j + b.length);
 }
 const code = section('//#PURE-START', '//#PURE-END') + '\n' + section('//#ADDR-START', '//#ADDR-END') + '\n' + section('//#GMAIL-START', '//#GMAIL-END') + '\n' + section('//#EXAMPLE-START', '//#EXAMPLE-END');
-const names = 'normEmail isEmail normPhone isPhone addrKey companyFromEmail parseAddrHeader decodeMimeWords parseEml stripQuoted htmlToText createMboxSplitter looksLikeMbox parseWhatsApp computeStats msgIdOf hash64 fmtListDate fmtDayLabel waitDays isoWeek weeklyBuckets partiesOf buildOwnSet buildAddrIndex ensureMember buildExampleDocs toMsgDoc previewOf bytesToLatin1 relDays dayDiff parseAddressList nameFromAddress planEmailChats FREE_MAIL gmailQueryForChat stripQuotedMail gmailMsgToAppMsg gmailDocId gmailErrorInfo replySubject findSentMatch gmailComposeUrl matchPending mailtoHref discoveryQueries connectedAccountFromThreads discoverCounterparts workScore isWorkGroup groupCompany matchExistingChat periodTerm isAutomationAddr JOB_BOARDS ATS_DOMAINS isNewsletterLike bioPlatform bioLabel bioStrings secTips unlockDelayMs safeLink linkifyText linkMismatch labelHostOf redactDiag buildSendDiag diagResultText SEC_MIN cmpVersion detectDeviceInfo deviceStatus looksLikePersonName dottedInitials isSensitive'.split(' ');
+const names = 'normEmail isEmail normPhone isPhone addrKey companyFromEmail parseAddrHeader decodeMimeWords parseEml stripQuoted htmlToText createMboxSplitter looksLikeMbox parseWhatsApp computeStats msgIdOf hash64 fmtListDate fmtDayLabel waitDays isoWeek weeklyBuckets partiesOf buildOwnSet buildAddrIndex ensureMember buildExampleDocs toMsgDoc previewOf bytesToLatin1 relDays dayDiff parseAddressList nameFromAddress planEmailChats FREE_MAIL gmailQueryForChat stripQuotedMail gmailMsgToAppMsg gmailDocId gmailErrorInfo replySubject findSentMatch gmailComposeUrl matchPending mailtoHref discoveryQueries connectedAccountFromThreads discoverCounterparts workScore isWorkGroup groupCompany matchExistingChat periodTerm isAutomationAddr JOB_BOARDS ATS_DOMAINS isNewsletterLike bioPlatform bioLabel bioStrings secTips unlockDelayMs safeLink linkifyText linkMismatch labelHostOf redactDiag buildSendDiag diagResultText SEC_MIN cmpVersion detectDeviceInfo deviceStatus looksLikePersonName dottedInitials isSensitive GOOGLE_CLIENT_RE GMAIL_SCOPE oauthRedirectUri oauthAuthUrl parseOAuthFragment gmailApiMsg gmailHttpError decodeEntities'.split(' ');
 const ctx = { TextDecoder, atob, btoa, console, Math, Date, Uint8Array, RegExp };
 vm.createContext(ctx);
 vm.runInContext(code + '\nglobalThis.__x={' + names.join(',') + '};', ctx);
@@ -578,6 +578,35 @@ eq('unlockDelayMs: junk input', [X.unlockDelayMs(undefined), X.unlockDelayMs(-3)
 // ---- Arkaluonteiset ----
 {
   eq('isSensitive: only strict true', [X.isSensitive({ sensitive: true }), X.isSensitive({ sensitive: 'true' }), X.isSensitive({}), X.isSensitive(null)], [true, false, false, false]);
+}
+
+// ---- Suora Gmail-yhteys (PWA): OAuth ja Gmail API -muunnos (kuvitteellista dataa) ----
+{
+  ok('client id ok', X.GOOGLE_CLIENT_RE.test('123456789012-abcdefgh1234.apps.googleusercontent.com'));
+  ok('client id bad', !X.GOOGLE_CLIENT_RE.test('abc.apps.googleusercontent.com') && !X.GOOGLE_CLIENT_RE.test('123456789012-abcdefgh1234.apps.googleusercontent.com.evil.example'));
+  eq('redirect uri strips hash/query/index.html', [X.oauthRedirectUri('https://esim.example/hv/index.html?x=1#a=b'), X.oauthRedirectUri('https://esim.example/hv/')], ['https://esim.example/hv/', 'https://esim.example/hv/']);
+  const u = X.oauthAuthUrl({ clientId: '1-abc', redirectUri: 'https://esim.example/hv/', state: 'st&1', loginHint: 'oma@example.com' });
+  ok('auth url: implicit token, readonly scope, encoded state', u.startsWith('https://accounts.google.com/o/oauth2/v2/auth?') && u.includes('response_type=token') && u.includes('scope=' + encodeURIComponent(X.GMAIL_SCOPE)) && u.includes('state=st%261') && u.includes('redirect_uri=https%3A%2F%2Fesim.example%2Fhv%2F') && u.includes('login_hint=oma%40example.com') && !/gmail\.(send|modify)|mail\.google\.com\/?&/.test(decodeURIComponent(u)), u);
+  eq('fragment: token', X.parseOAuthFragment('#access_token=ya29.x-y&token_type=Bearer&expires_in=3599&scope=' + encodeURIComponent(X.GMAIL_SCOPE) + '&state=abc'), { token: 'ya29.x-y', state: 'abc', expiresIn: 3599, scope: X.GMAIL_SCOPE, error: '' });
+  eq('fragment: error', X.parseOAuthFragment('#error=access_denied&state=abc').error, 'access_denied');
+  eq('fragment: not oauth', [X.parseOAuthFragment(''), X.parseOAuthFragment('#chat=1')], [null, null]);
+  const b64 = s => Buffer.from(s, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const full = { id: 'm1', threadId: 't1', internalDate: '1793000000000', labelIds: ['INBOX'], snippet: 'Kiitos &amp; tervetuloa &#39;huomenna&#39;',
+    payload: { mimeType: 'multipart/mixed', headers: [{ name: 'From', value: '"Heli Ranta" <Rekry@Yritys.example.fi>' }, { name: 'To', value: 'Oma Esimerkki <oma.esimerkki@gmail.com>' }, { name: 'Cc', value: 'toinen@yritys.example.fi' }, { name: 'Subject', value: '=?UTF-8?Q?Haastattelu_k=C3=A4ynnist=C3=A4?=' }, { name: 'Date', value: 'Mon, 26 Oct 2026 10:00:00 +0200' }],
+      parts: [{ mimeType: 'multipart/alternative', parts: [{ mimeType: 'text/plain', headers: [{ name: 'Content-Type', value: 'text/plain; charset=UTF-8' }], body: { data: b64('Hei, tervetuloa haastatteluun ä.') } }, { mimeType: 'text/html', body: { data: b64('<p>Hei</p>') } }] },
+        { mimeType: 'application/pdf', filename: 'ohje.pdf', body: { attachmentId: 'a1', size: 10 } }] } };
+  const gm = X.gmailApiMsg(full, true);
+  eq('api msg: connector shape', [gm.id, gm.threadId, gm.sender, gm.toRecipients, gm.ccRecipients, gm.subject, gm.plaintextBody, gm.attachments, gm.snippet, gm.addressDisplayNames.length],
+    ['m1', 't1', 'rekry@yritys.example.fi', ['oma.esimerkki@gmail.com'], ['toinen@yritys.example.fi'], 'Haastattelu käynnistä', 'Hei, tervetuloa haastatteluun ä.', [{ filename: 'ohje.pdf' }], "Kiitos & tervetuloa 'huomenna'", 2]);
+  const am = X.gmailMsgToAppMsg(gm, new Set(['oma.esimerkki@gmail.com']));
+  ok('api msg -> app msg', am.id === 'gm-m1' && am.dir === 'in' && am.fromName === 'Heli Ranta' && am.body === 'Hei, tervetuloa haastatteluun ä.' && am.at === new Date(1793000000000).toISOString(), am);
+  const htmlOnly = X.gmailApiMsg({ id: 'm2', payload: { mimeType: 'text/html', headers: [{ name: 'From', value: 'x@y.example' }], body: { data: b64('<div>Rivi 1<br>Rivi 2</div>') } } }, true);
+  eq('api msg: html fallback', htmlOnly.plaintextBody, 'Rivi 1\nRivi 2');
+  const meta = X.gmailApiMsg(Object.assign({}, full, { labelIds: ['SENT'] }), false);
+  ok('api msg: metadata has no body', meta.plaintextBody === undefined && meta.labelIds[0] === 'SENT');
+  eq('http errors', [X.gmailHttpError(401, null).code, X.gmailHttpError(429, null, '3').retryAfterMs, X.gmailHttpError(403, { error: { errors: [{ reason: 'insufficientPermissions' }] } }).code, X.gmailHttpError(403, { error: { errors: [{ reason: 'accessNotConfigured' }] } }).code, X.gmailHttpError(503, null).retryable, X.gmailHttpError(400, null).code],
+    ['oauth_expired', 3000, 'oauth_scope', 'api_disabled', true, 'tool_error']);
+  ok('error info: reauth codes', X.gmailErrorInfo({ code: 'oauth_expired' }).reauth === true && X.gmailErrorInfo({ code: 'oauth_scope' }).reauth === true && /Gmail API/.test(X.gmailErrorInfo({ code: 'api_disabled' }).text));
 }
 
 console.log(`\n${pass} ok, ${fail} fail`);

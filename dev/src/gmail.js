@@ -83,6 +83,10 @@ function gmailErrorInfo(err) {
   if (code === 'not_in_manifest') return Object.assign(base, { kind: code, text: perms, openPerms: true });
   if (code === 'approval_required') return Object.assign(base, { kind: code, text: perms, openPerms: true, retry: true });
   if (code === 'blocked_by_policy') return Object.assign(base, { kind: code, text: 'Organisaation asetukset estävät tämän.' });
+  if (code === 'oauth_expired') return Object.assign(base, { kind: code, reauth: true, text: 'Google-kirjautuminen on vanhentunut (se on voimassa tunnin). Kirjaudu uudelleen.' });
+  if (code === 'oauth_scope') return Object.assign(base, { kind: code, reauth: true, text: 'Gmailin lukulupa puuttuu. Kirjaudu uudelleen ja salli sähköpostien lukeminen.' });
+  if (code === 'api_disabled') return Object.assign(base, { kind: code, text: 'Gmail API ei ole päällä Google Cloud -projektissasi. Ota se käyttöön: APIs & Services → Library → Gmail API → Enable.' });
+  if (code === 'not_supported') return Object.assign(base, { kind: code, text: 'Tätä ei voi tehdä puhelinversiosta. Lähetä viestit sähköpostisovelluksella.' });
   if (code === 'tool_error') return Object.assign(base, { kind: code, text: String((err && err.message) || 'Gmail-työkalu palautti virheen.') });
   const uncertain = ['server_unavailable', 'upstream_error', 'cancelled'].includes(code);
   return Object.assign(base, { kind: uncertain ? 'uncertain' : 'default', uncertain, text: 'Gmail-virhe: ' + (code || 'tuntematon') });
@@ -162,6 +166,77 @@ function discoverCounterparts(threads, ownSet) {
     out.push(grp);
   }
   return out.sort((a, b) => (Date.parse(b.lastAt) || 0) - (Date.parse(a.lastAt) || 0));
+}
+/* ===== Suora Gmail-yhteys (PWA): Google OAuth (implicit, vain luku) + Gmail REST =====
+   Puhtaat apufunktiot: OAuth-osoite, paluufragmentin jäsennys ja Gmail API -viestin muunnos samaan muotoon kuin yhdistäjän viestit. */
+const GOOGLE_CLIENT_RE = /^\d{6,}-[a-z0-9]{8,}\.apps\.googleusercontent\.com$/;
+const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+// Paluuosoite = sovelluksen osoite ilman fragmenttia, kyselyä ja index.html:ää (pitää vastata Google Cloudiin rekisteröityä)
+const oauthRedirectUri = href => String(href || '').split('#')[0].split('?')[0].replace(/index\.html$/, '');
+function oauthAuthUrl(o) {
+  const p = [['client_id', o.clientId], ['redirect_uri', o.redirectUri], ['response_type', 'token'], ['scope', GMAIL_SCOPE], ['state', o.state],
+    ['include_granted_scopes', 'true'], ['prompt', 'select_account'], ['login_hint', o.loginHint || '']].filter(x => x[1]);
+  return 'https://accounts.google.com/o/oauth2/v2/auth?' + p.map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
+}
+// "#access_token=...&state=..." -> {token, state, expiresIn, scope, error} | null (ei OAuth-paluu)
+function parseOAuthFragment(hash) {
+  const s = String(hash || '').replace(/^#/, '');
+  if (!/(^|&)(access_token|error)=/.test(s)) return null;
+  const o = {};
+  s.split('&').forEach(kv => {
+    const i = kv.indexOf('='); if (i < 1) return;
+    try { o[decodeURIComponent(kv.slice(0, i))] = decodeURIComponent(kv.slice(i + 1).replace(/\+/g, ' ')); } catch (e) { /* rikkinäinen pari ohitetaan */ }
+  });
+  const ex = Number(o.expires_in);
+  return { token: o.access_token || '', state: o.state || '', expiresIn: isFinite(ex) && ex > 0 ? ex : 3600, scope: o.scope || '', error: o.error || '' };
+}
+const b64urlToBytes = s => bytesFromStr(atob(padB64(String(s || '').replace(/-/g, '+').replace(/_/g, '/').replace(/[^A-Za-z0-9+/=]/g, ''))));
+const decodeEntities = s => String(s || '').replace(/&#x([0-9a-f]+);/gi, (_, x) => String.fromCodePoint(parseInt(x, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
+  .replace(/&nbsp;/gi, ' ').replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&amp;/gi, '&');
+function gmailApiParts(part, acc, depth) {
+  if (!part || depth > 10) return;
+  const hs = {}; (part.headers || []).forEach(x => { const k = String(x.name || '').toLowerCase(); if (!(k in hs)) hs[k] = String(x.value || ''); });
+  const mt = String(part.mimeType || '').toLowerCase();
+  if (part.filename) { acc.files.push(decodeMimeWords(String(part.filename))); return; }
+  if (/^\s*attachment/i.test(hs['content-disposition'] || '')) return;
+  if (mt.startsWith('multipart/')) { (part.parts || []).forEach(p => gmailApiParts(p, acc, depth + 1)); return; }
+  const data = part.body && part.body.data;
+  if (!data || (mt !== 'text/plain' && mt !== 'text/html')) return;
+  let txt = '';
+  try { txt = decodeBytes(b64urlToBytes(data), parseCT(hs['content-type'] || '').params.charset); } catch (e) { return; }
+  (mt === 'text/plain' ? acc.plain : acc.html).push(txt);
+}
+// Gmail API:n viesti (format=metadata tai full) -> yhdistäjän viestimuoto (sender, toRecipients, addressDisplayNames, plaintextBody ...)
+function gmailApiMsg(m, full) {
+  if (!m || !m.id) return null;
+  const hs = {}; (((m.payload && m.payload.headers) || [])).forEach(x => { const k = String(x.name || '').toLowerCase(); if (!(k in hs)) hs[k] = decodeMimeWords(String(x.value || '')); });
+  const from = parseAddrHeader(hs.from || '')[0] || { name: '', email: '' };
+  const to = parseAddrHeader(hs.to || ''), cc = parseAddrHeader(hs.cc || '');
+  const out = {
+    id: String(m.id), threadId: String(m.threadId || ''), internalDate: String(m.internalDate || ''), date: hs.date || '',
+    labelIds: (m.labelIds || []).slice(), sender: from.email || '',
+    toRecipients: to.map(a => a.email).filter(Boolean), ccRecipients: cc.map(a => a.email).filter(Boolean),
+    addressDisplayNames: [from].concat(to, cc).filter(a => a.email && a.name).map(a => ({ emailAddress: a.email, displayName: a.name })),
+    subject: hs.subject || '', snippet: decodeEntities(m.snippet)
+  };
+  if (full) {
+    const acc = { plain: [], html: [], files: [] };
+    gmailApiParts(m.payload, acc, 0);
+    out.plaintextBody = acc.plain.length ? acc.plain.join('\n\n') : acc.html.length ? htmlToText(acc.html.join('\n')) : '';
+    out.attachments = acc.files.slice(0, 20).map(filename => ({ filename }));
+  }
+  return out;
+}
+// HTTP-vastaus -> virhekoodi (sama muoto kuin yhdistäjän virheillä)
+function gmailHttpError(status, body, retryAfter) {
+  const reason = String((body && body.error && ((body.error.errors && body.error.errors[0] && body.error.errors[0].reason) || body.error.status)) || '');
+  const ra = Number(retryAfter) > 0 ? Number(retryAfter) * 1000 : 0;
+  if (status === 401) return { code: 'oauth_expired', message: 'Kirjautuminen vanhentui' };
+  if (status === 429 || /rateLimit|userRateLimit|RESOURCE_EXHAUSTED/i.test(reason)) return { code: 'server_unavailable', retryable: true, retryAfterMs: ra || 2000, message: 'Liikaa pyyntöjä' };
+  if (status === 403 && /insufficient|PERMISSION_DENIED|scope/i.test(reason)) return { code: 'oauth_scope', message: 'Lukulupa puuttuu' };
+  if (status === 403 && /accessNotConfigured|SERVICE_DISABLED/i.test(reason)) return { code: 'api_disabled', message: 'Gmail API ei ole käytössä' };
+  if (status >= 500) return { code: 'server_unavailable', retryable: true, retryAfterMs: ra || 1500, message: 'Gmail ei vastannut' };
+  return { code: 'tool_error', message: 'Gmail palautti virheen (' + status + (reason ? ', ' + reason : '') + ').' };
 }
 // Sääntöpohjainen työpaikkapisteytys (>= 2 = työpaikka)
 // Uutiskirjemäinen: kaikki osoitteet automaatiota/tiedotteita, et ole koskaan vastannut, ja vähintään 5 ketjua
