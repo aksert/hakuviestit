@@ -15,7 +15,7 @@ cd dev
 node build.js
 node test-pure.js ../hakuviestit.html
 node test-crypto.js ../hakuviestit.html
-node test-dom.js            # myös: gmail, gmail-null, standalone, layout, disc, disc-nosample, native
+node test-dom.js            # myös: gmail, gmail-null, standalone, standalone-gmail, layout, disc, disc-nosample, native
 node e2e-gmail.js ../hakuviestit.html   # Playwright
 node e2e-sec.js ../hakuviestit.html     # Playwright
 ```

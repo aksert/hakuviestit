@@ -7,7 +7,7 @@ const WORK = path.resolve(__dirname, '..');
 const rd = f => fs.readFileSync(path.join(SP, 'src', f), 'utf8').replace(/\r\n/g, '\n');
 
 const pure = rd('pure.js');
-const js = [pure, rd('addr.js'), rd('gmail.js'), rd('crypto.js'), rd('app1.js'), rd('app2.js'), rd('app3.js'), rd('app5.js'), rd('app6.js'), rd('app7.js'), rd('app8.js'), rd('app4.js')].join('\n');
+const js = [pure, rd('addr.js'), rd('gmail.js'), rd('crypto.js'), rd('app1.js'), rd('app2.js'), rd('app3.js'), rd('app5.js'), rd('app6.js'), rd('app7.js'), rd('app8.js'), rd('app9.js'), rd('app4.js')].join('\n');
 const css = rd('style.css') + rd('layout.css');
 const body = `<div id="app">
 <div id="banner" class="banner" role="status" hidden></div>

@@ -26,8 +26,11 @@ function updateMailCard() {
   const on = gmailAvailable();
   u.mailControls.hidden = !on;
   u.mailNa.hidden = on;
-  u.mailNa.textContent = STANDALONE ? 'Suora haku toimii claude.ai-versiossa, kun Gmail on yhdistetty. Voit tuoda viestit tiedostoina alta.' : 'Yhdistä Gmail claude.ai:n asetuksissa (Yhdistäjät), niin haku toimii. Voit myös tuoda viestit tiedostoina alta.';
-  if (!on) u.files.open = true;
+  const rest = gmailRestCapable();
+  u.mailNa.textContent = rest ? 'Yhdistä Gmail kirjautumalla Googleen, niin sovellus hakee työviestit suoraan tähän puhelimeen. Voit myös tuoda viestit tiedostoina alta.' : STANDALONE ? 'Suora haku toimii claude.ai-versiossa, kun Gmail on yhdistetty. Voit tuoda viestit tiedostoina alta.' : 'Yhdistä Gmail claude.ai:n asetuksissa (Yhdistäjät), niin haku toimii. Voit myös tuoda viestit tiedostoina alta.';
+  u.mailConnect.hidden = on || !rest;
+  u.mailConnect.textContent = gmailClientId() ? 'Yhdistä Gmail' : 'Ota Gmail-yhteys käyttöön';
+  if (!on && !rest) u.files.open = true;
   if (on && !u.mailIn.value) u.mailIn.value = myEmail();
   u.mailGo.disabled = !!(DISC.busy || GM.busy);
 }
@@ -57,14 +60,15 @@ function buildImportView() {
   const mailControls = h('div', { id: 'imp-mail-controls' }, field('imp-mail', 'Sähköpostiosoite', mailIn), field('imp-mail-period', 'Aikaväli', mailPeriod), mailErr, mailGo,
     h('p', { class: 'hint', text: 'Haku toimii Gmail-tileille. Outlook-postin voit tuoda tiedostoina.', style: 'margin:8px 0 0' }));
   const mailNa = h('p', { class: 'hint', id: 'imp-mail-na', hidden: true });
-  const mailCard = importCard('Hae sähköpostista', 'Kirjoita oma sähköpostiosoitteesi. Sovellus käy läpi työnhakuun liittyvät viestit, tekee jokaisesta työnantajasta nimetyn keskustelun ja lisää vanhat viestit niihin. Mitään ei lähetetä.', mailControls, mailNa);
+  const mailConnect = h('button', { class: 'btn primary block', type: 'button', id: 'imp-mail-connect', hidden: true, style: 'margin-top:10px', onclick: () => { if (gmailClientId()) gmailConnect('discover'); else { showView('accounts'); setTimeout(() => { const d = $('#gm-howto'); if (d) d.open = true; const c = $('#gm-card'); if (c && c.scrollIntoView) c.scrollIntoView(); }, 50); } } });
+  const mailCard = importCard('Hae sähköpostista', 'Kirjoita oma sähköpostiosoitteesi. Sovellus käy läpi työnhakuun liittyvät viestit, tekee jokaisesta työnantajasta nimetyn keskustelun ja lisää vanhat viestit niihin. Mitään ei lähetetä.', mailControls, mailNa, mailConnect);
   mailCard.setAttribute('id', 'imp-mail-card');
   const files = h('details', { class: 'card fold', id: 'imp-files' }, h('summary', { text: 'Tuo tiedostoista (.eml, .mbox)' }),
     h('p', { text: 'Gmail: avaa viesti → ⋮ → Lataa viesti (.eml). Kaikki kerralla: takeout.google.com → Mail (.mbox). Outlook: tallenna viesti tiedostoon.' }), emlF.el);
   home.append(status, err, mailCard, files,
     importCard('WhatsApp-keskustelu (.txt)', 'WhatsApp → keskustelu → ⋮ → Lisää → Vie keskustelu → Ilman mediaa.', waF.el));
   root.append(home, review);
-  Object.assign(imp.ui, { mailControls, mailNa, mailIn, mailPeriod, mailGo, mailErr, files, home, review });
+  Object.assign(imp.ui, { mailControls, mailNa, mailConnect, mailIn, mailPeriod, mailGo, mailErr, files, home, review });
   views.import = { root, onShow: updateImportCaps };
   return root;
 }

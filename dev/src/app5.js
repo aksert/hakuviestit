@@ -1,7 +1,7 @@
 /* ===== Tietosuoja: salasana, salaus, lukitus ===== */
 const SEC = { inner: null, wstore: null, meta: null, metaRaw: null, key: null, unsubs: [], last: Date.now(), hiddenAt: 0, timer: null, waitTimer: null };
 // Uusissa asetuksissa automaattinen lukitus on 2 min (meta.lm = 2). Vanhoilla käyttäjillä (ei lm-kenttää) oletus pysyy 5 min eikä tallennettuja valintoja muuteta.
-const DEFAULT_SETTINGS = { lockMin: 2, hidePreview: false, gmailDirect: false };
+const DEFAULT_SETTINGS = { lockMin: 2, hidePreview: false, gmailDirect: false, gmailClientId: '' };
 function settings() {
   const lm = SEC.meta ? (SEC.meta.lm || 5) : DEFAULT_SETTINGS.lockMin;
   return Object.assign({}, DEFAULT_SETTINGS, { lockMin: lm }, (S.profile && S.profile.settings) || {});
@@ -342,12 +342,14 @@ function enterApp(key, meta, w) {
   clearInterval(SEC.timer);
   SEC.timer = setInterval(() => { if (!S.locked && Date.now() - SEC.last > settings().lockMin * 60000) lockNow(); }, 5000);
   updateImportCaps(); renderAccounts();
+  gmailAfterUnlock();
   if (SEC.inner.mode === 'local') migratePlain(SEC.wstore, key).catch(() => { /* seuraava avaus yrittää uudelleen */ });
 }
 // Lukitus: avain, puretut tiedot, tilaukset ja koko käyttöliittymän sisältö nollataan muistista
 function lockNow() {
   if (S.locked || !SEC.inner) return;
   S.locked = true;
+  gmailRestForget();   // Google-kirjautuminen unohdetaan lukittaessa
   clearInterval(SEC.timer); SEC.timer = null;
   stopStick(); stopData();
   sheetStack.slice().forEach(s => { try { s.close(); } catch (e) { /* ok */ } });
@@ -412,7 +414,7 @@ function privacySection() {
     h('div', { class: 'card' },
       h('ul', { class: 'privlist' },
         h('li', { text: 'Tiedot salataan laitteellasi ennen tallennusta. Tallennettua sisältöä ei voi lukea ilman salasanaasi.' }),
-        h('li', { text: 'Gmail-haku kulkee claude.ai:n Gmail-yhdistäjän kautta: haetut viestit kulkevat sen läpi, mutta ne tallennetaan vain salattuina.' }),
+        h('li', { text: STANDALONE ? 'Gmail-haku (jos yhdistät sen) hakee viestit suoraan Googlelta tähän puhelimeen vain lukuluvalla. Ne tallennetaan vain salattuina.' : 'Gmail-haku kulkee claude.ai:n Gmail-yhdistäjän kautta: haetut viestit kulkevat sen läpi, mutta ne tallennetaan vain salattuina.' }),
         h('li', { text: 'Mitään ei lähetetä Claudelle tai tekoälylle. Tiedot näkyvät vain sinulle.' }),
         h('li', { text: 'Jaettu linkki ei näytä tietojasi muille: tiedot ovat vain sinun tililläsi ja salattuja.' })),
       h('div', { class: 'privstat mono', id: 'sec-status' }),

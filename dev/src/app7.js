@@ -3,7 +3,9 @@
    Sähköpostien sisältö kulkee vain salaavan tallennuskerroksen (S.store) kautta ja näytetään textContentilla. */
 S.mcp = null; S.perm = null;
 const GM = { busy: false, permOk: false };
-const gmailAvailable = () => !!S.mcp && !STANDALONE && !S.locked;
+// claude.ai: Gmail-yhdistäjä (mcp). Puhelinversio: suora vain luku -yhteys (gmailRestBackend), kun Google-kirjautuminen on voimassa.
+const gmailAvailable = () => !!S.mcp && !S.locked && (S.mcp.rest ? gmailRestReady() : !STANDALONE);
+const gmailIsRest = () => !!(S.mcp && S.mcp.rest);
 const chatEmails = chat => [...new Set(((chat && chat.members) || []).flatMap(m => m.emails || []).map(normEmail).filter(isEmail))];
 const myEmailSet = () => new Set(((S.profile && S.profile.identities) || []).filter(i => i.type === 'email').map(i => normEmail(i.value)));
 const myEmail = () => { const i = ((S.profile && S.profile.identities) || []).find(x => x.type === 'email'); return i ? normEmail(i.value) : ''; };
@@ -56,6 +58,9 @@ function gmailErrorBox(err, retryFn) {
   if (info.unavailable) { S.mcp = null; setTimeout(refreshGmailUi, 0); }
   const box = h('div', { class: 'gm-err', id: 'gm-err', role: 'alert' }, h('p', { id: 'gm-err-text', text: info.text }));
   const row = h('div', { class: 'btn-row' });
+  if (info.reauth && gmailRestCapable()) {
+    row.append(h('button', { class: 'btn primary', type: 'button', id: 'gm-reauth', text: 'Kirjaudu Googleen', onclick: () => gmailConnect('') }));
+  }
   if (info.openPerms) {
     row.append(h('button', { class: 'btn', type: 'button', id: 'gm-perms', text: 'Avaa luvat', onclick: async () => {
       try { const p = await getPerms(); if (!p || !p.manage) throw new Error('ei'); await p.manage(); }
@@ -177,7 +182,7 @@ function gmailComposeSend(o) {
   const opts = emails.slice();
   if (inc && inc.from && isEmail(inc.from) && !opts.includes(inc.from)) opts.unshift(inc.from);
   const defTo = inc && opts.includes(inc.from) ? inc.from : opts[0];
-  const direct = !!settings().gmailDirect && gmailAvailable();
+  const direct = !!settings().gmailDirect && gmailAvailable() && !gmailIsRest();
   openSheet('Kirjoita sähköposti', (body, api) => {
     const toSel = h('select', { id: 'gc-to', 'aria-label': 'Vastaanottaja' }, opts.map(e => h('option', { value: e, text: e, selected: e === defTo })));
     const subj = h('input', { id: 'gc-subject', type: 'text', autocomplete: 'off', value: latest ? replySubject(latest.subject) : (o.subject || ''), disabled: !!latest && direct, placeholder: 'Aihe' });
@@ -342,19 +347,23 @@ function gmailSection() {
   return h('div', { class: 'sec', id: 'gm-card' }, h('h2', { text: 'Gmail' }),
     h('div', { class: 'card' },
       h('p', { id: 'gm-note', style: 'margin-bottom:8px' }),
+      gmailRestSection(),
       h('button', { class: 'btn block', type: 'button', id: 'gm-discover', style: 'margin-bottom:8px', onclick: () => openDiscoverPrompt() }, ico('search', 18), 'Etsi työpaikkakeskustelut'),
       h('button', { class: 'btn block', type: 'button', id: 'gm-sync-all', style: 'margin-bottom:10px', onclick: gmailSyncAll }, ico('refresh', 18), 'Hae kaikki keskustelut Gmailista'),
       h('label', { class: 'check', id: 'gm-direct-row', for: 'gm-direct', style: 'margin-bottom:2px' }, h('input', { id: 'gm-direct', type: 'checkbox', onchange: e => saveSettings({ gmailDirect: e.target.checked }) }), h('span', { text: 'Lähetä suoraan Gmailin kautta (vaatii Gmailin lähetysluvan)' })),
       h('p', { class: 'hint', id: 'gm-direct-hint', style: 'margin:0 0 10px 32px', text: 'Oletuksena sähköposti avataan sähköpostisovellukseen ja lähetät sen siellä.' }),
-      h('p', { class: 'hint', id: 'gm-privacy', style: 'margin-bottom:6px', text: 'Sähköpostit tallennetaan salattuina. Gmail-haku ja -lähetys tapahtuvat vain kun painat painiketta.' }),
+      h('p', { class: 'hint', id: 'gm-privacy', style: 'margin-bottom:6px', text: STANDALONE ? 'Sähköpostit tallennetaan salattuina. Gmail-haku tapahtuu vain kun painat painiketta.' : 'Sähköpostit tallennetaan salattuina. Gmail-haku ja -lähetys tapahtuvat vain kun painat painiketta.' }),
       h('p', { class: 'hint', id: 'gm-outlook', style: 'margin:0', text: 'Outlook/Hotmail: tuo viestit nykyisellä tuontitoiminnolla (suora yhteys ei vielä tuettu).' })));
 }
 function renderGmail() {
   const note = $('#gm-note'); if (!note) return;
   const on = gmailAvailable();
-  note.textContent = on ? 'Gmail on käytettävissä. Hae keskustelujen sähköpostit painikkeella tai kirjoita vastaus chatin kirjauspalkista sähköpostiin.' : 'Gmail-yhteys toimii, kun sovellus avataan claude.ai:ssa.';
+  const rest = gmailRestCapable();
+  note.textContent = on ? (gmailIsRest() ? 'Gmail on yhdistetty. Etsi työpaikkakeskustelut tai hae keskustelujen sähköpostit painikkeilla.' : 'Gmail on käytettävissä. Hae keskustelujen sähköpostit painikkeella tai kirjoita vastaus chatin kirjauspalkista sähköpostiin.') : rest ? 'Hae työnhaun sähköpostit suoraan Gmailista tähän puhelimeen.' : 'Gmail-yhteys toimii, kun sovellus avataan claude.ai:ssa.';
   const dr = $('#gm-direct'); if (dr) dr.checked = !!settings().gmailDirect;
-  $('#gm-direct-row').hidden = !on; $('#gm-direct-hint').hidden = !on;
+  const dOn = on && !gmailIsRest();
+  $('#gm-direct-row').hidden = !dOn; $('#gm-direct-hint').hidden = !dOn;
+  renderGmailRest();
   $('#gm-sync-all').hidden = !on; $('#gm-discover').hidden = !on; $('#gm-privacy').hidden = !on;
 }
 function refreshGmailUi() {
