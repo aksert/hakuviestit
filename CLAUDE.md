@@ -25,5 +25,5 @@ Kaikkien sarjojen pitää olla 0 fail ennen commitia. Commitoi myös päivittyny
 - Mitään ei lähetetä Claudelle/tekoälylle (ei `sample`-kyvykkyyttä).
 - Tallennettavat tiedot salataan (PBKDF2-SHA256 600k + AES-GCM). Diagnostiikkaan (`diag/*`) ei koskaan viestin sisältöä, aihetta tai vastaanottajia.
 - Testeissä ja sivulla ei koskaan oikeaa Gmail-dataa tai henkilötietoja – repo on julkinen.
-- Ei kolmannen osapuolen pyyntöjä PWA:ssa (CSP `'self'`).
+- Ei kolmannen osapuolen pyyntöjä PWA:ssa (CSP `'self'`). Ainoa poikkeus (omistajan hyväksymä): `connect-src https://gmail.googleapis.com` suoraa Gmail-hakua varten – vain `gmail.readonly`, vain käyttäjän napautuksesta, token vain muistissa (ei tallenneta, unohdetaan lukittaessa). Ei muita ulkoisia osoitteita.
 - Actionit pinnataan commit-SHA:han; vain GitHubin omat actionit sallittu.
